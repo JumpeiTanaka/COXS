@@ -1,0 +1,15 @@
+source ver1#s1('X':string, 'Y':string).
+source ver1#s2('X':string, 'Y':string).
+target ver2#t1('X':string, 'Y':string).
+
+% constraints: ⊥
+
+% schema evolution
+t1(X,Y) :- s1(X,Y).
+t1(X,Y) :- s2(X,Y).
+
+% backward propagation
++s1(X,Y) :- +t1(X,Y), not s1(X,Y), not s2(X,Y).
++s2(X,Y) :- +t1(X,Y), not s1(X,Y), not s2(X,Y).
+-s1(X,Y) :- -t1(X,Y), s1(X,Y).
+-s2(X,Y) :- -t1(X,Y), s2(X,Y).

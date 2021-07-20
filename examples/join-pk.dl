@@ -1,0 +1,20 @@
+source ver1#s1('X':string, 'Y':string).
+source ver1#s2('X':string, 'Z':string).
+target ver2#t1('X':string,'Y':string, 'Z':string).
+
+% constraint
+pk(s1,['X']).
+pk(s2,['X']).
+pk(t1,['X']).
+
+_|_ :- +t1(X,Y,Z), not s1(X,_), s2(X,Z1), not Z=Z1.
+_|_ :- +t1(X,Y,Z), s1(X,Y1), not s2(X,_), not Y=Y1.
+
+% get
+t1(X,Y,Z) :- s1(X,Y), s2(X,Z).
+
+% strategy
++s1(X,Y) :- +t1(X,Y,Z), not s1(X,Y).
++s2(X,Z) :- +t1(X,Y,Z), not s2(X,Z).
+-s1(X,Y) :- -t1(X,Y,_), not +t1(X,Y,_), s1(X,Y), s2(X,_).
+-s2(X,Z) :- -t1(X,_,Z), not +t1(X,_,Z), s1(X,_), s2(X,Z).

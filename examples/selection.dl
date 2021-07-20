@@ -1,0 +1,14 @@
+% Schema definition
+source ver1#s1('X':string,'Y':string).
+target ver2#t1('X':string,'Y':string).
+
+% constraint
+
+% Evolved relations
+t1(X,Y) :- s1(X,Y), Y='A'.
+
+% backward propagation
++s1(X,Y) :- +t1(X,Y), not s1(X,Y), Y='A'.
+-s1(X,Y) :- -t1(X,Y), s1(X,Y), Y='A'.
++s1(X,Y) :- +t1(X,Y), not s1(X,Y), Y='B'.
+-s1(X,Y) :- -t1(X,Y), s1(X,Y), Y='B'.

@@ -1,0 +1,13 @@
+% source schema
+source ver1#s1('X':int, 'Y':int).
+source ver1#s2('X':int, 'Y':int).
+
+% target schema
+target ver2#t1('X':int, 'Y':int).
+
+% schema evolution
+t1(X,Y) :- s1(X,Y), not s2(X,Y).
+
+% backward propagation
++s1(X,Y) :- +t1(X,Y), not s1(X,Y), not s2(X,Y).
+-s1(X,Y) :- -t1(X,Y), s1(X,Y), not s2(X,Y).

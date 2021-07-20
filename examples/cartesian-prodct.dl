@@ -1,0 +1,37 @@
+% source schema
+source ver1#s1('A':string, 'B':string).
+source ver1#s2('X':string, 'Y':string).
+
+% auxiliary tables
+source phy#i_aux('A':string, 'B':string, 'X':string, 'Y':string).
+
+% target schema
+target ver2#t('A':string, 'B':string, 'X':string, 'Y':string).
+
+% constraint
+
+% schema evolution
+t(A,B,X,Y) :- s1(A,B), s2(X,Y), not i_aux(A,B,X,Y).
+
+% delta
+t0(A,B,X,Y) :- s1(A,B), s2(X,Y), not i_aux(A,B,X,Y).
+t00(A,B,X,Y) :- t0(A,B,X,Y), not -t(A,B,X,Y).
+t00(A,B,X,Y) :- +t(A,B,X,Y).
+
+% backward propagation
++s1(A,B) :- +t(A,B,X,Y), not s1(A,B).
++s2(X,Y) :- +t(A,B,X,Y), not s2(X,Y).
+
+s1_u(A,B) :- s1(A,B).
+s1_u(A,B) :- +s1(A,B).
+s2_u(X,Y) :- s2(X,Y).
+s2_u(X,Y) :- +s2(X,Y).
+
++i_aux(A,B,X,Y) :- not t00(A,B,X,Y), s1_u(A,B), s2_u(X,Y), not i_aux(A,B,X,Y).
+-i_aux(A,B,X,Y) :- t00(A,B,X,Y), s1_u(A,B), s2_u(X,Y), i_aux(A,B,X,Y).
+
+-s1(A,B) :- -t(A,B,X,Y), s1(A,B), not s1_other(A,_).
+s1_other(A,B) :- -t(A,B1,_,_), s1(A,B), not B1=B.
+
+-s2(X,Y) :- -t(A,B,X,Y), s2(X,Y), not s2_other(X,_).
+s2_other(X,Y) :- -t(_,_,X,Y1), s2(X,Y), not Y1=Y.
