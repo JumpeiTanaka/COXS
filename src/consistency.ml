@@ -204,7 +204,7 @@ result
   F(S ⊕ F'(S,∆T)) ⊂ F(S) ⊕ ∆T
 *)
 (* generate schema by given source rel list and target_rel *)
-let generate_schema ast_schemas source_rels target_rel =
+let generate_schema ast_schemas source_rels target_rel  target_rel_lst =
 
   let rec generate_t sttl_schema target_rel = match sttl_schema with
     | [] -> []
@@ -232,9 +232,22 @@ let generate_schema ast_schemas source_rels target_rel =
       | _ -> []
   in
 
+  let rec generate_t2s sttl_schema t2s_rel_lst = match sttl_schema with
+    | [] -> []
+    | hd::rest -> (_1_generate_t2s hd t2s_rel_lst) @ (generate_t2s rest t2s_rel_lst)
+    and _1_generate_t2s stt t2s_rel_lst = match stt with
+      | Target_schema (_, rel, varlst) ->
+        if List.mem rel t2s_rel_lst
+        then [ Source(rel, varlst)]
+        else []
+      | _ -> []
+  in
+
+  let t2s_rel_lst = List.filter (fun x -> x <> target_rel) target_rel_lst in
   let ast_schema_target = generate_t (get_sttl ast_schemas) target_rel in
   let ast_schema_source = generate_s (get_sttl ast_schemas) source_rels in
-  let ast_schemas_consis = Prog (ast_schema_target @ ast_schema_source) in
+  let ast_schema_t2source = generate_t2s (get_sttl ast_schemas) t2s_rel_lst in
+  let ast_schemas_consis = Prog (ast_schema_target @ ast_schema_source @ ast_schema_t2source) in
 
 ast_schemas_consis
 ;;
@@ -277,140 +290,121 @@ let generate_constraint_consis ast_constraint source_rels target_rel =
 ast_constraint_consis
 ;;
 
+(* generate ruturned insertion on target *)
+let generate_ast_return_insdel ast_pred target_rel =
 
-
-(* generate tmp target rule and ins/del on target *)
-let generate_ast_pred_newr ast_pred target_rel =
-
-  let rec get_idb_lst rule_sttl = match rule_sttl with
+  let rec generate sttl_pred starget_rel head_rels = match sttl_pred with
     | [] -> []
-    | hd::rest -> (_1_get_idb_lst hd) @ (get_idb_lst rest)
-    and _1_get_idb_lst stt = match stt with
-      | Rule (Pred(rel, varlst), bodylst) -> [rel]
-      | _ -> []
-  in
+    | hd::rest -> (_2_generate hd target_rel head_rels) @ (generate rest target_rel head_rels)
 
-  let rec get_body_lst rule_sttl = match rule_sttl with
-    | [] -> []
-    | hd::rest -> (_1_get_body_lst hd) @ (get_body_lst rest)
-    and _1_get_body_lst stt = match stt with
-      | Rule (Pred(rel, varlst), bodylst) -> _2_get_body_lst bodylst
-      | _ -> []
-    and _2_get_body_lst bodylst = match bodylst with
-      | [] -> []
-      | hd::rest -> (_3_get_body_lst hd) @ (_2_get_body_lst rest)
-    and _3_get_body_lst tm = match tm with
-      | Rel(Pred(rel, varlst)) -> [rel]
-      | Not(Pred(rel, varlst)) -> [rel]
-      | _ -> []
-  in
-
-  let rec generate sttl_pred target_rel idb_rel_lst body_rel_lst = match sttl_pred with
-    | [] -> []
-    | hd::rest -> (_2_generate hd target_rel idb_rel_lst body_rel_lst)
-                  @ (generate rest target_rel idb_rel_lst body_rel_lst)
-
-  and _2_generate stt target_rel idb_rel_lst body_rel_lst = match stt with
+  and _2_generate stt target_rel head_rels = match stt with
     | Rule (Pred (rel, varlst), bodylst) ->
-        let renamed_bodylst = rename bodylst idb_rel_lst in
         if rel = target_rel
         then
-          [ Rule (Pred (("tmp_" ^ rel), varlst), renamed_bodylst);
-            Rule (Pred (("newr_" ^ rel), varlst), [Rel(Pred(("tmp_" ^ rel), varlst));
-                                                  Not(Pred(("del_" ^ rel), varlst)) ]);
-            Rule (Pred (("newr_" ^ rel), varlst), [Rel(Pred(("ins_" ^ rel), varlst))])
+          [
+           Rule (Pred (("r_ins_" ^ rel), varlst), [Rel(Pred("new_" ^ rel, varlst)); Not(Pred (("tmp_" ^ rel), varlst))]);
+           Rule (Pred (("r_del_" ^ rel), varlst), [Not(Pred("new_" ^ rel, varlst)); Rel(Pred (("tmp_" ^ rel), varlst))]);
+           Rule (Pred (("tmp_" ^ rel), varlst), (_3_generate bodylst head_rels));
           ]
-        else if List.mem rel body_rel_lst
-        then
-          [Rule (Pred ("tmp_" ^ rel, varlst), renamed_bodylst)]
         else
-          [Rule (Pred (rel, varlst), renamed_bodylst)]
+          [Rule (Pred ("tmp_" ^ rel, varlst), (_3_generate bodylst head_rels))]
     | _ -> []
 
-  and rename bodylst idb_rel_lst = match bodylst with
+  and _3_generate bodylst head_rels = match bodylst with
     | [] -> []
-    | hd::rest -> (_1_rename hd idb_rel_lst) @ (rename rest idb_rel_lst)
-  and _1_rename tm idb_rel_lst = match tm with
-    | Rel (Pred(rel, varlst)) ->
-        if List.mem rel idb_rel_lst
-        then
-          [Rel (Pred("tmp_" ^ rel, varlst))]
-        else
-          [tm]
-    | Not (Pred(rel, varlst)) ->
-        if List.mem rel idb_rel_lst
-        then
-          [Not (Pred("tmp_" ^ rel, varlst))]
-        else
-          [tm]
+    | hd::rest -> (_4_generate hd head_rels) @ (_3_generate rest head_rels)
+
+  and _4_generate tm head_rels = match tm with
+    | Rel (Pred (rel, varlst)) ->
+        if (List.mem rel head_rels)
+        then [Rel (Pred (("tmp_" ^ rel), varlst))]
+        else [tm]
+    | Not (Pred (rel, varlst)) ->
+        if (List.mem rel head_rels)
+        then [Not (Pred (("tmp_" ^ rel), varlst))]
+        else [tm]
     | _ -> [tm]
+
   in
 
-  let idb_rel_lst = list_setminus (unique_element @@ get_idb_lst (get_sttl ast_pred)) [target_rel] in
-  let body_rel_lst = unique_element @@ get_body_lst (get_sttl ast_pred) in
-
-  let result = Prog (generate (get_sttl ast_pred) target_rel idb_rel_lst body_rel_lst) in
+  let head_rels = get_rels_head ast_pred in
+  let result = Prog (generate (get_sttl ast_pred) target_rel head_rels) in
 
 result
 ;;
 
 
-(* generate new_right target rule and ins/del on target *)
 let generate_ast_pred_tmp ast_pred target_rel =
 
-  let rec generate sttl_pred starget_rel = match sttl_pred with
+  let rec generate sttl_pred starget_rel head_rels = match sttl_pred with
     | [] -> []
-    | hd::rest -> (_2_generate hd target_rel) @ (generate rest target_rel)
+    | hd::rest -> (_2_generate hd target_rel head_rels) @ (generate rest target_rel head_rels)
 
-  and _2_generate stt target_rel = match stt with
+  and _2_generate stt target_rel head_rels = match stt with
     | Rule (Pred (rel, varlst), bodylst) ->
         if rel = target_rel
         then
-          [Rule (Pred (("tmp_" ^ rel), varlst), bodylst);
+          [
            Rule (Pred (("ins_" ^ rel), varlst), [Rel(Pred(rel, varlst)); Not(Pred (("tmp_" ^ rel), varlst))]);
-           Rule (Pred (("del_" ^ rel), varlst), [Not(Pred(rel, varlst)); Rel(Pred (("tmp_" ^ rel), varlst))])
+           Rule (Pred (("del_" ^ rel), varlst), [Not(Pred(rel, varlst)); Rel(Pred (("tmp_" ^ rel), varlst))]);
+           Rule (Pred (("tmp_" ^ rel), varlst), (_3_generate bodylst head_rels));
           ]
         else
-          [Rule (Pred (rel, varlst), bodylst)]
+          [Rule (Pred ("tmp_" ^ rel, varlst), (_3_generate bodylst head_rels))]
     | _ -> []
+
+  and _3_generate bodylst head_rels = match bodylst with
+    | [] -> []
+    | hd::rest -> (_4_generate hd head_rels) @ (_3_generate rest head_rels)
+
+  and _4_generate tm head_rels = match tm with
+    | Rel (Pred (rel, varlst)) ->
+        if (List.mem rel head_rels)
+        then [Rel (Pred (("tmp_" ^ rel), varlst))]
+        else [tm]
+    | Not (Pred (rel, varlst)) ->
+        if (List.mem rel head_rels)
+        then [Not (Pred (("tmp_" ^ rel), varlst))]
+        else [tm]
+    | _ -> [tm]
+
   in
 
-  let result = Prog (generate (get_sttl ast_pred) target_rel) in
+  let head_rels = get_rels_head ast_pred in
+  let result = Prog (generate (get_sttl ast_pred) target_rel head_rels) in
 
 result
 ;;
 
-let generate_ast_pred_new ast_pred source_rels target_rel =
+let generate_ast_pred_new ast_pred source_rels =
 
-  let rec generate sttl_pred source_rels target_rel = match sttl_pred with
+  let rec generate sttl_pred source_rels head_rels= match sttl_pred with
     | [] -> []
-    | hd::rest -> (_2_generate hd source_rels target_rel) @ (generate rest source_rels target_rel)
+    | hd::rest -> (_2_generate hd source_rels head_rels) @ (generate rest source_rels head_rels)
 
-  and _2_generate stt source_rels target_rel = match stt with
+  and _2_generate stt source_rels head_rels = match stt with
     | Rule (Pred (rel, varlst), bodylst) ->
-        if rel = target_rel
-        then
-          [Rule (Pred (("new_" ^ rel), varlst), (_3_generate bodylst source_rels)) ]
-        else
-          [Rule (Pred (rel, varlst), (_3_generate bodylst source_rels))]
+          [Rule (Pred (("new_" ^ rel), varlst), (_3_generate bodylst source_rels head_rels)) ]
     | _ -> []
 
-  and _3_generate bodylst source_rels = match bodylst with
+  and _3_generate bodylst source_rels head_rels = match bodylst with
     | [] -> []
-    | hd::rest -> (_4_generate hd source_rels) @ (_3_generate rest source_rels)
-  and _4_generate tm source_rels = match tm with
+    | hd::rest -> (_4_generate hd source_rels head_rels) @ (_3_generate rest source_rels head_rels)
+
+  and _4_generate tm source_rels head_rels = match tm with
     | Rel (Pred (rel, varlst)) ->
-        if List.mem rel source_rels
+        if (List.mem rel source_rels) ||  (List.mem rel head_rels)
         then [Rel (Pred (("new_" ^ rel), varlst))]
         else [tm]
     | Not (Pred (rel, varlst)) ->
-        if List.mem rel source_rels
+        if (List.mem rel source_rels) ||  (List.mem rel head_rels)
         then [Not (Pred (("new_" ^ rel), varlst))]
         else [tm]
     | _ -> [tm]
   in
 
-  let result = Prog (generate (get_sttl ast_pred) source_rels target_rel) in
+  let head_rels = get_rels_head ast_pred in
+  let result = Prog (generate (get_sttl ast_pred) source_rels head_rels) in
 
 result
 ;;
@@ -452,9 +446,9 @@ ast_bwd_consis
 ;;
 
 (* generate s_new rules *)
-let generate_ast_bwd_new ast_pred_consis source_pred_lst source_ins_rels source_del_rels source_pred_lst =
+let generate_ast_bwd_new ast_pred_tmp source_pred_lst source_ins_rels source_del_rels =
 
-  let rec generate sttl_pred_consis source_rels source_ins_rels source_del_rels source_pred_lst = match sttl_pred_consis with
+  let rec generate sttl_pred_tmp source_rels source_ins_rels source_del_rels source_pred_lst = match sttl_pred_tmp with
     | [] -> []
     | hd::rest -> (_1_generate hd source_rels source_ins_rels source_del_rels source_pred_lst)
                    @ (generate rest source_rels source_ins_rels source_del_rels source_pred_lst)
@@ -518,25 +512,28 @@ and get_varlst rel source_pred_lst = match source_pred_lst with
     | _ -> []
 in
 
-  let sttl_pred_consis = get_sttl ast_pred_consis in
+  let sttl_pred_tmp = get_sttl ast_pred_tmp in
   let source_rels = get_rels source_pred_lst in
-  let ast_bwd_new = Prog (unique_element @@ generate sttl_pred_consis source_rels source_ins_rels source_del_rels source_pred_lst) in
+  let ast_bwd_new = Prog (unique_element @@ generate sttl_pred_tmp source_rels source_ins_rels source_del_rels source_pred_lst) in
 
 ast_bwd_new
 ;;
 
+
 (* generate goal of consistency checking *)
-let generate_ast_pred_goal target_pred =
+let generate_ast_pred_goal_ins target_pred =
 
   let generate target_pred = match target_pred with
-    | Pred (rel, varlst) -> Pred (("goal_" ^ rel), varlst)
+    | Pred (rel, varlst) -> Pred (("goal_ins_" ^ rel), varlst)
     | _ -> invalid_arg "function generate_goal without Pred"
   in
 
   let generate_ast target_pred = match target_pred with
     | Pred (rel, varlst) ->
-        Prog [Rule (Pred( ("goal_" ^ rel), varlst), [Rel(Pred( ("new_" ^ rel), varlst));
-                                                     Not(Pred(("newr_" ^ rel), varlst))] ) ]
+        Prog [Rule (Pred( ("goal_ins_" ^ rel), varlst), [Rel(Pred( ("r_ins_" ^ rel), varlst));
+                                                         Not(Pred(("ins_" ^ rel), varlst))]
+                   )
+             ]
     | _ -> invalid_arg "function generate_goal without Pred"
   in
 
@@ -546,78 +543,226 @@ let generate_ast_pred_goal target_pred =
 goal, ast_goal
 ;;
 
+(* generate goal of consistency checking *)
+let generate_ast_pred_goal_del target_pred =
+
+  let generate target_pred = match target_pred with
+    | Pred (rel, varlst) -> Pred (("goal_del_" ^ rel), varlst)
+    | _ -> invalid_arg "function generate_goal without Pred"
+  in
+
+  let generate_ast target_pred = match target_pred with
+    | Pred (rel, varlst) ->
+        Prog [Rule (Pred( ("goal_del_" ^ rel), varlst), [Rel (Pred( ("r_del_" ^ rel), varlst));
+                                                         Not (Pred(("del_" ^ rel), varlst)) ]
+                   )
+             ]
+    | _ -> invalid_arg "function generate_goal without Pred"
+  in
+
+  let goal = generate target_pred in
+  let ast_goal = generate_ast target_pred in
+
+goal, ast_goal
+;;
+
+
 (* -----------------------------------------------------------------------------------------*)
-let check ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst evolved_bwd_pred_lst source_ins_rels source_del_rels log timeout =
+let check_insdel ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst evolved_bwd_pred_lst source_ins_rels source_del_rels target_pred_lst log timeout =
 
-  let rec check_consistency ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst pred_lst log timeout = match pred_lst with
+  let rec check_consistency ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst pred_lst target_rel_lst log timeout = match pred_lst with
     | [] -> []
-    | hd::rest -> (_1_check_consistency ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst hd log timeout)
-                  @ (check_consistency ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst rest log timeout)
+    | hd::rest -> (_1_check_consistency ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst hd  target_rel_lst log timeout)
+                  @ (check_consistency ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst rest target_rel_lst log timeout)
 
-    and _1_check_consistency ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst target_pred log timeout =
+    and _1_check_consistency ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst target_pred target_rel_lst log timeout =
 
       let source_rels = get_rels source_pred_lst in
       let target_rel = get_rel_from_pred target_pred in
-
-      let ast_schema_consis = generate_schema ast_schemas source_rels target_rel in
+      let ast_schema_consis = generate_schema ast_schemas source_rels target_rel target_rel_lst in
       let ast_constraint_consis = generate_constraint_consis ast_constraint source_rels target_rel in
       let ast_pred = get_one_query ast_schevo target_pred in
-
-(*      let ast_bwd_pred = filter_bwd ast_bwd target_pred in *)
       let source_rels2 = get_rels_inbody ast_pred source_rels in
-      let ast_bwd_pred = get_queries ast_bwd source_rels2 in
-      let ast_pred_tmp = generate_ast_pred_tmp ast_pred target_rel in
-      let ast_pred_newr = generate_ast_pred_newr ast_pred target_rel in
-      let ast_bwd_consis = generate_ast_bwd_consis ast_bwd_pred in
-      let ast_bwd_new = generate_ast_bwd_new ast_pred_tmp source_pred_lst source_ins_rels source_del_rels source_pred_lst in
-      let ast_pred_new = generate_ast_pred_new ast_pred source_rels target_rel in
-      let goal, ast_pred_goal = generate_ast_pred_goal target_pred in
 
-              print_endline "ast_constraint_consis:"; Expr.print_ast ast_constraint_consis; printf "\n";
-              print_endline "ast_bwd_pred:"; Expr.print_ast ast_bwd_pred; printf "\n";
-              print_endline "ast_pred_tmp:"; Expr.print_ast ast_pred_tmp; printf "\n";
-              print_endline "ast_pred_newr:"; Expr.print_ast ast_pred_newr; printf "\n";
-              print_endline "ast_bwd_consis:"; Expr.print_ast ast_bwd_consis; printf "\n";
-              print_endline "ast_bwd_new:"; Expr.print_ast ast_bwd_new; printf "\n";
-              print_endline "ast_pred_new:"; Expr.print_ast ast_pred_new; printf "\n";
+      let ins_rules = get_rules_ins_in_body ast_bwd target_rel in
+      let del_rules = get_rules_del_in_body ast_bwd target_rel in
 
-      let ast_consis_0 = List.fold_left merge_ast (Prog [])
-                         [ast_schema_consis; ast_constraint_consis;
-                          ast_pred_tmp;
-                          ast_bwd_consis; ast_bwd_new; ast_pred_new;
-                          ast_pred_newr;
-                         ast_pred_goal]
+      let head_preds_ins = get_preds_head ins_rules in
+      let head_preds_del = get_preds_head del_rules in
+
+      let ast_bwd_pred_ins =
+        let nodel_ast_bwd = subtract_ast ast_bwd del_rules in
+        let rec get_queries_ins ast preds = match preds with
+          | [] -> []
+          | hd::rest -> (get_sttl @@ get_one_query ast hd) @ (get_queries_ins ast rest)
+        in
+        Prog (unique_element @@ get_queries_ins nodel_ast_bwd head_preds_ins)
       in
-      let ast_consis = Prog (unique_element @@ get_sttl ast_consis_0) in
 
-          if !log
-          then begin
-              print_endline "ast_consistency:"; Expr.print_ast ast_consis; printf "\n";
-              printf "goal = %s\n" (string_of_rterm goal);
+      let ast_bwd_pred_del =
+        let nodel_ast_bwd = subtract_ast ast_bwd ins_rules in
+        let rec get_queries_del ast preds = match preds with
+          | [] -> []
+          | hd::rest -> (get_sttl @@ get_one_query ast hd) @ (get_queries_del ast rest)
+        in
+        Prog (unique_element @@ get_queries_del nodel_ast_bwd head_preds_del)
+      in
+
+      let ast_pred_tmp = generate_ast_pred_tmp ast_pred target_rel in
+
+      let ast_bwd_consis_ins = generate_ast_bwd_consis ast_bwd_pred_ins in
+      let ast_bwd_consis_del = generate_ast_bwd_consis ast_bwd_pred_del in
+
+      let bwd_pred_ins_source_ins_rels =
+        let rels = unique_element @@ get_ins_rels_head ast_bwd_pred_ins in
+        List.filter (fun x -> List.mem x source_rels) rels
+      in
+
+      let bwd_pred_ins_source_del_rels =
+        let rels = unique_element @@ get_del_rels_head ast_bwd_pred_ins in
+        List.filter (fun x -> List.mem x source_rels) rels
+      in
+
+      let bwd_pred_del_source_ins_rels =
+        let rels = unique_element @@ get_ins_rels_head ast_bwd_pred_del in
+        List.filter (fun x -> List.mem x source_rels) rels
+      in
+
+      let bwd_pred_del_source_del_rels =
+        let rels = unique_element @@ get_del_rels_head ast_bwd_pred_del in
+        List.filter (fun x -> List.mem x source_rels) rels
+      in
+
+      let ast_bwd_new = generate_ast_bwd_new
+        ast_pred_tmp source_pred_lst
+        (bwd_pred_ins_source_ins_rels @ bwd_pred_del_source_ins_rels)
+        (bwd_pred_ins_source_del_rels @ bwd_pred_del_source_del_rels)
+      in
+
+      let ast_return_insdel = generate_ast_return_insdel ast_pred target_rel in
+
+      let ast_pred_new = generate_ast_pred_new ast_pred source_rels in
+
+      let goal_ins, ast_pred_goal_ins = generate_ast_pred_goal_ins target_pred in
+      let goal_del, ast_pred_goal_del = generate_ast_pred_goal_del target_pred in
+
+
+        if !log
+        then begin
+              printf "source_rels => [";
+              let print_el s = printf "%s; " s in
+              List.iter print_el source_rels;
+              printf "]\n";
+
+              printf "target_rel => %s\n" target_rel;
+
+              print_endline "ast_schema_consis:"; Expr.print_ast ast_schema_consis; printf "\n";
+              print_endline "ast_constraint_consis:"; Expr.print_ast ast_constraint_consis; printf "\n";
+              print_endline "ast_pred:"; Expr.print_ast ast_pred; printf "\n";
+              print_endline "ast_bwd_pred_ins:"; Expr.print_ast ast_bwd_pred_ins; printf "\n";
+              print_endline "ast_bwd_pred_del:"; Expr.print_ast ast_bwd_pred_del; printf "\n";
+              print_endline "ast_pred_tmp:"; Expr.print_ast ast_pred_tmp; printf "\n";
+              print_endline "ast_bwd_consis_ins:"; Expr.print_ast ast_bwd_consis_ins; printf "\n";
+              print_endline "ast_bwd_consis_del:"; Expr.print_ast ast_bwd_consis_del; printf "\n";
+              print_endline "ast_bwd_new:"; Expr.print_ast ast_bwd_new; printf "\n";
+              print_endline "ast_return_insdel:"; Expr.print_ast ast_return_insdel; printf "\n";
+              print_endline "ast_pred_new:"; Expr.print_ast ast_pred_new; printf "\n";
+              print_endline "ast_pred_goal_ins:"; Expr.print_ast ast_pred_goal_ins; printf "\n";
+              print_endline "ast_pred_goal_del:"; Expr.print_ast ast_pred_goal_del; printf "\n";
+        end
+        else ();
+
+
+      (* --- Consisitency check of insertion on T --- *)
+      let ast_consis_ins_0 = List.fold_left merge_ast (Prog [])
+                            [ ast_schema_consis;
+                              ast_constraint_consis;
+                              ast_pred_goal_ins;
+                              ast_pred_new;
+                              ast_bwd_new;
+                              ast_bwd_consis_ins;
+                              ast_bwd_consis_del;
+                              ast_pred_tmp;
+                              ast_return_insdel;
+                             ]
+      in
+
+      let ast_consis_ins = Prog (unique_element @@ get_sttl ast_consis_ins_0) in
+
+          (* is_consistency = 0 means satisfying consistency , 1 is not *)
+          if !log then begin
+            print_endline "ast_consistency_ins:"; Expr.print_ast ast_consis_ins; printf "\n";
+            printf "goal_ins = %s\n\n" (string_of_rterm goal_ins);
           end
           else ();
 
       (* check satisfiability of consistency *)
-      let lean_fol_of_consistency = Satisfiability.lean_consistency ast_consis ast_constraint_consis target_pred goal log in
+      let lean_fol_of_consistency_ins = Satisfiability.lean_consistency ast_consis_ins ast_constraint_consis target_pred goal_ins log in
 
-      let is_consistency, msg = Utils.verify_fo_lean !log !timeout lean_fol_of_consistency in
+      let is_consistency_ins, msg_ins = Utils.verify_fo_lean !log !timeout lean_fol_of_consistency_ins in
 
-          (* is_consistency = 0 means satisfying consistency , 1 is not *)
-          if !log then begin printf "consistency = %d\n" is_consistency; end
+        if !log
+          then begin printf "consistency_ins = %d\n\n" is_consistency_ins; end
           else ();
 
-      if is_consistency != 0
+
+      (* --- Consisitency check of deletion on T --- *)
+      let ast_consis_del_0 = List.fold_left merge_ast (Prog [])
+                            [ ast_schema_consis;
+                              ast_constraint_consis;
+                              ast_pred_goal_del;
+                              ast_pred_new;
+                              ast_bwd_new;
+                              ast_bwd_consis_ins;
+                              ast_bwd_consis_del;
+                              ast_pred_tmp;
+                              ast_return_insdel;
+                             ]
+      in
+
+      let ast_consis_del = Prog (unique_element @@ get_sttl ast_consis_del_0) in
+
+          (* is_consistency = 0 means satisfying consistency , 1 is not *)
+          if !log then begin
+            print_endline "ast_consistency_del:"; Expr.print_ast ast_consis_del; printf "\n";
+            printf "goal_del = %s\n\n" (string_of_rterm goal_del);
+          end
+          else ();
+
+      (* check satisfiability of consistency *)
+      let lean_fol_of_consistency_del = Satisfiability.lean_consistency ast_consis_del ast_constraint_consis target_pred goal_del log in
+
+      let is_consistency_del, msg_del = Utils.verify_fo_lean !log !timeout lean_fol_of_consistency_del in
+
+        if !log
+          then begin printf "consistency_del = %d\n\n" is_consistency_del; end
+          else ();
+
+      (* --- result --- *)
+      if (is_consistency_ins != 0) &&  (is_consistency_del != 0)
       then begin
-        let result = "Consistency is not satisfied about rules of " ^ (string_of_rterm goal) ^ "\n."in
-        [result]
+        let result_ins = "Consistency is not satisfied about rules of " ^ (string_of_rterm goal_ins) ^ "\n." in
+        let result_del = "Consistency is not satisfied about rules of " ^ (string_of_rterm goal_del) ^ "\n." in
+        [result_ins; result_del]
       end
+      else if (is_consistency_ins != 0) && (is_consistency_del = 0)
+          then begin
+            let result_ins = "Consistency is not satisfied about rules of " ^ (string_of_rterm goal_ins) ^ "\n." in
+            [result_ins]
+          end
+      else if (is_consistency_ins = 0) && (is_consistency_del != 0)
+          then begin
+            let result_del = "Consistency is not satisfied about rules of " ^ (string_of_rterm goal_del) ^ "\n." in
+            [result_del]
+          end
       else
         []
 
   in
 
+  let target_rel_lst = get_rels target_pred_lst in
   let pred_lst = evolved_bwd_pred_lst in
-  let result = check_consistency ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst pred_lst log timeout in
+  let result = check_consistency ast_schemas ast_constraint ast_schevo ast_bwd source_pred_lst pred_lst target_rel_lst log timeout in
 
 result
 ;;

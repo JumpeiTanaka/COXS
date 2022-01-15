@@ -325,6 +325,20 @@ let get_source e = match e with
                  List.filter is_q sttl
 ;;
 
+
+(* make var from string varlst *)
+let make_var varlst =
+  let rec gen varlst = match varlst with
+   | [] -> []
+   | hd::rest -> (_1_gen hd) @ (gen rest)
+  and _1_gen hd =
+    [NamedVar(hd)]
+  in
+
+  let result = gen varlst in
+result
+;;
+
 (* **************************************************************
   get rel name of source and view from AST
   Input: source s1(A,B) and view t1(A,B) in ast
@@ -347,6 +361,69 @@ let get_rels_schema ast =
 result
 ;;
 
+
+(* **************************************************************
+  get var_types of source and view from AST
+  Input: source s1('A':int, 'B':string) and view t1('A':int) in ast,
+         s1
+  Output: ['A':int; 'B':string]
+************************************************************** *)
+let get_vartypes_schema ast rel =
+
+  let rec get ast = match ast with
+    | Prog sttl -> _1_get sttl
+    and _1_get sttl = match sttl with
+      | [] -> []
+      | hd::rest -> (_2_get hd) @ (_1_get rest)
+    and _2_get stt = match stt with
+      | Source (s_rel, s_varlst)
+      | View (s_rel, s_varlst)
+        ->  if s_rel = rel then s_varlst else []
+      | Source_schema(sc, s_rel, s_varlst)
+      | Target_schema(sc, s_rel, s_varlst)
+        ->  if s_rel = rel then s_varlst else []
+      | _ -> []
+  in
+
+  let result = get ast in
+result
+;;
+
+(* **************************************************************
+  get rel name of source from AST
+  Input: source s1(A,B) and view t1(A,B) in ast
+  Output: ["s1"; "t1"]
+************************************************************** *)
+let get_source_rels_schema ast =
+
+  let rec get ast = match ast with
+    | Prog sttl -> _1_get sttl
+    and _1_get sttl = match sttl with
+      | [] -> []
+      | hd::rest -> (_2_get hd) @ (_1_get rest)
+    and _2_get stt = match stt with
+      | Source (rel, valrst) -> [rel]
+      | _ -> []
+  in
+
+  let result = get ast in
+result
+;;
+
+(*
+(* **************************************************************
+  filter nos_preds from pred list
+************************************************************** *)
+let rec get_nos_preds preds = match preds with
+  | [] -> []
+  | hd::rest -> (_1_get hd) @ (get_nos_preds rest)
+
+  and _1_get rt = match rt with
+    | Deltainsert_nos (rel, varlst) -> [rt]
+    | Deltadelete_nos (rel, varlst) -> [rt]
+    | _ -> []
+;;
+*)
 
 (* retrive view name *)
 let get_view_name prog =
@@ -376,9 +453,14 @@ let get_view_name prog =
   Out: relname1
 **********************************************)
 let get_rel_from_pred pred = match pred with
-  | Pred(relname, _) -> relname
-  | _ -> invalid_arg "function get_rel_from_pred without Pred"
+  | Pred(relname, _)
+  | Deltainsert(relname, _)
+  | Deltadelete(relname, _)
+  | Deltainsert_nos(relname, _)
+  | Deltadelete_nos(relname, _) -> relname
+  (* | _ -> invalid_arg "function get_rel_from_pred without Pred" *)
 ;;
+
 
 (*********************************************
   retrieve relation name from a predicate
@@ -389,6 +471,9 @@ let get_varlst_from_pred pred = match pred with
   | Pred(_, varlst) -> varlst
   | _ -> invalid_arg "function get_rel_from_pred without Pred"
 ;;
+
+
+
 
 (*********************************************
   retrieve relation name from a predicate list
@@ -418,6 +503,8 @@ let get_rels_body prog =
       | Rule (Pred(name, varlst), bodylst)          -> _3_get_rels_body bodylst rels
       | Rule (Deltainsert(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
       | Rule (Deltadelete(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
+      | Rule (Deltainsert_nos(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
+      | Rule (Deltadelete_nos(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
     | _ -> rels
 
     and _3_get_rels_body bodylst rels = match bodylst with
@@ -426,15 +513,193 @@ let get_rels_body prog =
 
     and _4_get_rels_body hd rels = match hd with
       | Rel(Pred(name, _))
-      | Rel(Deltainsert(name, _))
-      | Rel(Deltadelete(name, _))
-      | Not(Pred(name, _))
-      | Not(Deltainsert(name, _))
-      | Not(Deltadelete(name, _)) -> rels @ [name]
+      | Not(Pred(name, _)) -> rels @ [name]
+(*      | Rel(Deltainsert(name, _)) *)
+(*      | Rel(Deltadelete(name, _)) *)
+(*      | Not(Deltainsert(name, _)) *)
+(*      | Not(Deltadelete(name, _)) *)
       | _ -> rels
   in
 
   let result = _0_get_rels_body prog [] in
+result
+;;
+
+
+(*********************************************
+  In: Prog [Rule(Pred(name1, varlst1), bodylst1); ...]
+  Out: [name, ...] if predicate is not negated
+*********************************************)
+let get_rels_body_nonnegate prog =
+
+  let rec _0_get_rels_body prog rels = match prog with
+    | Prog sttl -> _1_get_rels_body sttl rels
+
+    and _1_get_rels_body sttl rels = match sttl with
+      | [] -> []
+      | hd::rest -> (_2_get_rels_body hd rels) @ (_1_get_rels_body rest rels)
+
+    and _2_get_rels_body hd rels = match hd with
+      | Rule (Pred(name, varlst), bodylst)          -> _3_get_rels_body bodylst rels
+      | Rule (Deltainsert(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
+      | Rule (Deltadelete(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
+      | Rule (Deltainsert_nos(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
+      | Rule (Deltadelete_nos(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
+    | _ -> rels
+
+    and _3_get_rels_body bodylst rels = match bodylst with
+      | [] -> []
+      | hd::rest -> (_4_get_rels_body hd rels) @ (_3_get_rels_body rest rels)
+
+    and _4_get_rels_body hd rels = match hd with
+      | Rel(Pred(name, _)) -> rels @ [name]
+      | _ -> rels
+  in
+
+  let result = _0_get_rels_body prog [] in
+result
+;;
+
+(*********************************************
+  In: Prog [Rule(Deltainsert(name1, varlst1), bodylst1); ...]
+  Out: [name, ...]
+*********************************************)
+let get_delta_rels_body prog =
+
+  let rec _0_get_rels_body prog rels = match prog with
+    | Prog sttl -> _1_get_rels_body sttl rels
+
+    and _1_get_rels_body sttl rels = match sttl with
+      | [] -> []
+      | hd::rest -> (_2_get_rels_body hd rels) @ (_1_get_rels_body rest rels)
+
+    and _2_get_rels_body hd rels = match hd with
+      | Rule (Pred(name, varlst), bodylst)          -> _3_get_rels_body bodylst rels
+      | Rule (Deltainsert(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
+      | Rule (Deltadelete(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
+      | Rule (Deltainsert_nos(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
+      | Rule (Deltadelete_nos(name, varlst), bodylst)   -> _3_get_rels_body bodylst rels
+      | _ -> rels
+
+    and _3_get_rels_body bodylst rels = match bodylst with
+      | [] -> []
+      | hd::rest -> (_4_get_rels_body hd rels) @ (_3_get_rels_body rest rels)
+
+    and _4_get_rels_body hd rels = match hd with
+      | Rel(Deltainsert(name, _))
+      | Rel(Deltadelete(name, _)) -> rels @ [name]
+(*    | Not(Deltainsert(name, _)) *)
+(*    | Not(Deltadelete(name, _)) *)
+      | _ -> rels
+  in
+
+  let result = _0_get_rels_body prog [] in
+result
+;;
+
+(*********************************************
+  In: [Rel(Pred(rel, varlst), ....]
+  Out: [rel, ...]
+*********************************************)
+let get_rels_body_tml tml  =
+
+  let rec get tml = match tml with
+    | [] -> []
+    | hd::rest -> (_1_get hd) @ (get rest)
+  and _1_get tm = match tm with
+      | Rel(Pred(rel, varlst))
+      | Rel(Deltainsert(rel, varlst))
+      | Rel(Deltadelete(rel, varlst))
+      | Not(Pred(rel, varlst))
+      | Not(Deltainsert(rel, varlst))
+      | Not(Deltadelete(rel, varlst)) -> [rel]
+      | _ -> []
+  in
+
+  let result = get tml in
+result
+;;
+
+(*********************************************
+  In: Prog [Rule(Pred(name1, varlst1), bodylst1); ...]
+  Out: [Pred(name1), ...]
+*********************************************)
+let get_preds_head prog =
+
+  let rec get sttl = match sttl with
+    | [] -> []
+    | hd::rest -> (_1_get hd) @ (get rest)
+
+  and _1_get stt = match stt with
+    | Rule (Pred (rel, varlst), _) -> [Pred (rel, varlst)]
+    | Rule (Deltainsert (rel, varlst), _) -> [Deltainsert (rel, varlst)]
+    | Rule (Deltadelete (rel, varlst), _) -> [Deltadelete (rel, varlst)]
+    | Rule (Deltainsert_nos (rel, varlst), _) -> [Deltainsert_nos (rel, varlst)]
+    | Rule (Deltadelete_nos (rel, varlst), _) -> [Deltadelete_nos (rel, varlst)]
+    | _ -> []
+  in
+
+  let result = get (get_sttl prog) in
+result
+;;
+
+
+(*********************************************
+  In: Prog [Rule(Pred(name1, varlst1), bodylst1); ...]
+  Out: [name1, ...]
+*********************************************)
+let get_rels_head prog =
+
+  let rec _0_get sttl = match sttl with
+    | [] -> []
+    | hd::rest -> (_1_get hd) @ (_0_get rest)
+
+  and _1_get stt = match stt with
+    | Rule (Pred (rel, varlst), _) -> [rel]
+    | Rule (Deltainsert (rel, varlst), _) -> [rel]
+    | Rule (Deltadelete (rel, varlst), _) -> [rel]
+    | _ -> []
+  in
+
+  let result = _0_get (get_sttl prog) in
+result
+;;
+
+(*********************************************
+  In: Prog [Rule(Deltainsert(name1, varlst1), bodylst1); ...]
+  Out: [name1, ...]
+*********************************************)
+let get_ins_rels_head prog =
+
+  let rec _0_get sttl = match sttl with
+    | [] -> []
+    | hd::rest -> (_1_get hd) @ (_0_get rest)
+
+  and _1_get stt = match stt with
+    | Rule (Deltainsert (rel, varlst), _) -> [rel]
+    | _ -> []
+  in
+
+  let result = _0_get (get_sttl prog) in
+result
+;;
+
+(*********************************************
+  In: Prog [Rule(Deltadelete(name1, varlst1), bodylst1); ...]
+  Out: [name1, ...]
+*********************************************)
+let get_del_rels_head prog =
+
+  let rec _0_get sttl = match sttl with
+    | [] -> []
+    | hd::rest -> (_1_get hd) @ (_0_get rest)
+
+  and _1_get stt = match stt with
+    | Rule (Deltadelete (rel, varlst), _) -> [rel]
+    | _ -> []
+  in
+
+  let result = _0_get (get_sttl prog) in
 result
 ;;
 
@@ -530,6 +795,152 @@ result
 ;;
 
 
+(* --------------------------------------------------------
+   filter rules by checking rels in body
+   In:
+     Prog ([
+     Rule(Pred(re1, varlst), [Rel(Pred(re12,varlst); Not(Pred(re13,varlst)]));
+     Rule(Pred(re1, varlst), [Rel(Pred(re12,varlst)]));
+     ],
+     rel_lst = [re1; re12;]
+   Out:
+      Rule(Pred(re1, varlst), [Rel(Pred(re12,varlst)]));
+--------------------------------------------------------*)
+let filter_rules_body ast rel_lst =
+
+  let rec filter sttl rel_lst = match sttl with
+    | [] -> []
+    | hd::rest -> (_1_filter hd rel_lst) @ (filter rest rel_lst)
+
+  and _1_filter stt rel_lst = match stt with
+    | Rule (Pred(rel, varlst), bodylst)
+    | Rule (Deltainsert(rel, varlst), bodylst)
+    | Rule (Deltadelete(rel, varlst), bodylst)
+    | Rule (Deltainsert_nos(rel, varlst), bodylst)
+    | Rule (Deltadelete_nos(rel, varlst), bodylst) ->
+      let check = _2_filter bodylst rel_lst in
+      if List.length check = 0
+        then [stt]
+        else []
+    | _ -> []
+
+  and _2_filter bodylst rel_lst = match bodylst with
+    | [] -> []
+    | hd::rest -> (_3_filter hd rel_lst) @ (_2_filter rest rel_lst)
+
+  and _3_filter tm rel_lst = match tm with
+    | Rel(Pred(rel, varlst))
+    | Rel(Deltainsert(rel, varlst))
+    | Rel(Deltadelete(rel, varlst))
+    | Not(Pred(rel, varlst))
+    | Not(Deltainsert(rel, varlst))
+    | Not(Deltadelete(rel, varlst)) ->
+        if List.mem rel rel_lst
+          then []
+          else [tm]
+    | _ -> []
+  in
+
+  let result = Prog (filter (get_sttl ast) rel_lst) in
+result
+;;
+
+
+(*********************************************
+  In: Prog [Rule(Pred(name1, varlst1), bodylst1);
+             Rule(Pred(name_a, varlst_a), bodylst_a);
+           ...; ],
+       rel_name
+  Out: [Rule(Pred(name1, varlst1), bodylst1);]
+       where rterm Deletainsert of rel_name exist in bodylst1
+*********************************************)
+let get_rules_ins_in_body ast rel =
+
+  let rec get sttl rel = match sttl with
+    | [] -> []
+    | hd::rest -> (_1_get hd rel) @ (get rest rel)
+
+    and _1_get stt rel = match stt with
+      | Rule(rt, tml) ->
+          let rel_ins_lst = _2_get tml rel in
+            (*
+            printf "rel_ins_lst => [";
+            let print_el s = printf "%s; " s in
+            List.iter print_el rel_ins_lst;
+            printf "]\n";
+            *)
+          if (List.length rel_ins_lst) >=1
+            then
+              let rel_ins = List.hd rel_ins_lst in
+              if rel_ins = rel
+                then [stt]
+                else []
+            else []
+      | _ -> []
+
+    and _2_get tml rel = match tml with
+      | [] -> []
+      | hd::rest -> (_3_get hd rel) @ (_2_get rest rel)
+
+    and _3_get tm rel = match tm with
+      | Rel(Deltainsert(rel, varlst)) -> [rel]
+      | _ -> []
+
+  in
+
+  let result = Prog (get (get_sttl ast) rel) in
+result
+;;
+
+
+(*********************************************
+  In: Prog [Rule(Pred(name1, varlst1), bodylst1);
+             Rule(Pred(name_a, varlst_a), bodylst_a);
+           ...; ],
+       rel_name
+  Out: [Rule(Pred(name1, varlst1), bodylst1);]
+       where rterm Deletadelete of rel_name exist in bodylst1
+*********************************************)
+let get_rules_del_in_body ast rel =
+
+  let rec get sttl rel = match sttl with
+    | [] -> []
+    | hd::rest -> (_1_get hd rel) @ (get rest rel)
+
+    and _1_get stt rel = match stt with
+      | Rule(rt, tml) ->
+        let rel_del_lst = _2_get tml rel in
+            (*
+            printf "rel_del_lst => [";
+            let print_el s = printf "%s; " s in
+            List.iter print_el rel_del_lst;
+            printf "]\n";
+            *)
+        if (List.length rel_del_lst) >=1
+          then
+            let rel_del = List.hd rel_del_lst in
+            if rel_del = rel
+              then [stt]
+            else []
+        else []
+      | _ -> []
+
+    and _2_get tml rel = match tml with
+      | [] -> []
+      | hd::rest -> (_3_get hd rel) @ (_2_get rest rel)
+
+    and _3_get tm rel = match tm with
+      | Rel(Deltadelete(rel, varlst)) -> [rel]
+      | _ -> []
+
+  in
+
+  let result = Prog (get (get_sttl ast) rel) in
+result
+;;
+
+
+
 (*********************************************
   In: AST, predicate of IBD (Pred(name1, varlst1)
   Out: Prog [Rule(Pred(name1, varlst1), bodylst1);
@@ -558,6 +969,14 @@ let get_one_query ast pred =
           if Deltadelete(rel, varlst) = target_pred
           then [Rule (Deltadelete(rel, varlst), b)]
           else []
+      | Rule (Deltainsert_nos(rel, varlst), b) ->
+          if Deltainsert_nos(rel, varlst) = target_pred
+          then [Rule (Deltainsert_nos(rel, varlst), b)]
+          else []
+      | Rule (Deltadelete_nos(rel, varlst), b) ->
+          if Deltadelete_nos(rel, varlst) = target_pred
+          then [Rule (Deltadelete_nos(rel, varlst), b)]
+          else []
       | _ -> []
   in
 
@@ -570,6 +989,14 @@ let get_one_query ast pred =
 
     and _2_get_new_rules hd rel_lst = match hd with
         | Rule (Pred(rel, varlst), bodylst) ->
+                    (*
+                    printf "rel_lst => [";
+                    let e = printf "%s; " in
+                    List.iter e rel_lst;
+                    printf "]\n";
+
+                    printf "Rule => %s\n" (string_of_stt hd);
+                    *)
                   if List.mem rel rel_lst
                   then [Rule (Pred(rel, varlst), bodylst)]
                   else []
@@ -578,6 +1005,11 @@ let get_one_query ast pred =
 
   let rec query ast rules body_rels =
       let new_rules = get_new_rules ast body_rels in
+          (*
+          printf "new_rules => [";
+          print_sttlst new_rules;
+          printf "]\n";
+          *)
       let new_body_rels = unique_element (get_rels_body (Prog (new_rules))) in
       let total_rules = Prog (unique_element ((Expr.get_sttl rules) @ new_rules)) in
 
@@ -600,10 +1032,15 @@ let get_one_query ast pred =
   in
 
   let init_rules = Prog (filter ast pred) in
+    (* print_endline "get_one_query.init_rules:"; Expr.print_ast init_rules; printf "\n"; *)
   let init_body_rels = get_rels_body init_rules in
+    (* printf "get_one_query.init_body_rels => [";
+    let print_el s = printf "%s; " s in
+    List.iter print_el init_body_rels; printf "]\n"; *)
   let result = query ast init_rules init_body_rels in
 result
 ;;
+
 
 (* input: AST, rel_lst for rule head *)
 let get_queries prog head_rel_lst =
@@ -634,6 +1071,9 @@ let get_queries prog head_rel_lst =
 
 result
 ;;
+
+
+
 
 (* get relname list of insertion delta relations in rules of backward propgation *)
 let rec get_bwd_ins_lst prog =
@@ -804,6 +1244,51 @@ let schema2schema ast_schema =
 
   let schema_birds = Prog (map ast_schema) in
 schema_birds
+;;
+
+
+(* filter pk_lst by rel *)
+let rec filter_pk ast_constraint_pk rel =
+
+  let rec filter sttl rel = match sttl with
+    | [] -> []
+    | hd::rest -> (_1_filter hd rel) @ (filter rest rel)
+
+    and _1_filter stt rel = match stt with
+      | Rule(get_empty_pred, bodylst) ->
+        let body_rel = List.hd (_2_filter @@ List.hd bodylst) in
+        if body_rel = rel
+          then [stt]
+          else []
+      | _ -> []
+
+    and _2_filter tm = match tm with
+      | Rel(Pred(rel, var)) -> [rel]
+      | _ -> [""]
+
+  in
+
+  let result = Prog( filter (get_sttl ast_constraint_pk) rel) in
+result
+;;
+
+(* --- transfrom non-shared ast to shared ast ----------------------- *)
+let nos2s ast =
+
+  let rec transform sttl = match sttl with
+    | [] -> []
+    | hd::rest -> (_1_transform hd) @ (transform rest)
+
+    and _1_transform stt = match stt with
+      | Rule (Deltainsert_nos(rel, varlst), tml) ->
+          [Rule (Deltainsert(rel, varlst), tml)]
+      | Rule (Deltadelete_nos(rel, varlst), tml) ->
+          [Rule (Deltadelete(rel, varlst), tml)]
+      | _ -> [stt]
+  in
+
+  let ast_shared = Prog (transform (get_sttl ast)) in
+ast_shared
 ;;
 
 (***********************************************************

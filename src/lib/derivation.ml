@@ -24,8 +24,8 @@ let deltapred_to_pred prefix = function
       | Pred (x, vl) -> rt
       | Deltainsert (x, vl) -> Pred (prefix ^ get_rterm_predname rt, vl)
       | Deltadelete (x, vl) -> Pred (prefix ^ get_rterm_predname rt, vl)
-      | Deltainsert_ot _ -> invalid_arg "the function deltapred_to_pred called with Deltainsert_ot"
-      | Deltadelete_ot _ -> invalid_arg "the function deltapred_to_pred called with Deltadelete_ot"
+      | Deltainsert_nos _ -> invalid_arg "the function deltapred_to_pred called with Deltainsert_nos"
+      | Deltadelete_nos _ -> invalid_arg "the function deltapred_to_pred called with Deltadelete_nos"
       in
     let term_map_to_pred tt = match tt with
       | Rel rt -> Rel (rterm_to_pred rt)
@@ -159,8 +159,8 @@ let mapping_rterm (col_names:colnamtab) (mapping:vartab) (rt:rterm) =
   Pred (pname, vl) -> Pred(pname, List.map mapped_var varlist)
   | Deltainsert (pname, vl) -> Deltainsert(pname, List.map mapped_var varlist)
   | Deltadelete (pname, vl) -> Deltadelete(pname, List.map mapped_var varlist)
-  | Deltainsert_ot _ -> invalid_arg "function mapping_rterm called with Deltainsert_ot"
-  | Deltadelete_ot _ -> invalid_arg "function mapping_rterm called with Deltadelete_ot"
+  | Deltainsert_nos _ -> invalid_arg "function mapping_rterm called with Deltainsert_nos"
+  | Deltadelete_nos _ -> invalid_arg "function mapping_rterm called with Deltadelete_nos"
 
 let get_neg_term (rt:rterm) = Not rt;;
 
@@ -253,8 +253,8 @@ let datalog_of_delta_appliation (log:bool) prog =
         (* there is only on deletion relation *)
             Rule(get_new_source_rel_pred delta, [Rel (get_source_rel_pred delta); Not delta]) ::lst
         else lst
-      | Deltainsert_ot _ -> invalid_arg "the function datalog_of_delta_appliation  called with Deltainsert_ot"
-      | Deltadelete_ot _ -> invalid_arg "the function datalog_of_delta_appliation  called with Deltadelete_ot"
+      | Deltainsert_nos _ -> invalid_arg "the function datalog_of_delta_appliation  called with Deltainsert_nos"
+      | Deltadelete_nos _ -> invalid_arg "the function datalog_of_delta_appliation  called with Deltadelete_nos"
       in
     let lst1 = List.fold_left application_rules [] delta_rt_lst in
     let source_lst = get_source_rterms prog in

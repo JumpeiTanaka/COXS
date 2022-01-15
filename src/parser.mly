@@ -168,6 +168,8 @@
   | NAME LPAREN varlist RPAREN	      	{ Pred ($1, $3) }
   | PLUS NAME LPAREN varlist RPAREN		{ Deltainsert ($2, $4) }
   | MINUS NAME LPAREN varlist RPAREN		{ Deltadelete ($2, $4) }
+  | LPAREN PLUS RPAREN NAME LPAREN varlist RPAREN		{ Deltainsert_nos ($4, $6) }
+  | LPAREN MINUS RPAREN NAME LPAREN varlist RPAREN		{ Deltadelete_nos ($4, $6) }
   | error                                 { spec_parse_error "invalid syntax for a predicate" 1; }
   ;
 

@@ -196,7 +196,7 @@ let filter_undef ast_ttl =
 ast_undef
 ;;
 
-
+(*
 (* @author: Jumpei Tanaka *)
 (* run lean to check FOL of consistency and return result *)
 let check_fol_of_consistency prog_schema_all prog_const prog_l prog_r evolved_pred_lst =
@@ -268,12 +268,13 @@ let check_fol_of_consistency prog_schema_all prog_const prog_l prog_r evolved_pr
 
 result
 ;;
+*)
 
-(* ===================================================================================== *)
-(* ===================================================================================== *)
+
 
 (* @author: Jumpei Tanaka *)
 (* generate a definition of consistency of co-existence strategy by Jumpei Tanaka *)
+(*
 let lean_consistency prog_schema prog_const prog_l prog_r bwd_delta_ins_lst bwd_delta_del_lst const_delta_ins_lst const_delta_del_lst evolved_pred_lst log =
 
     (* schema for constraints consists of:
@@ -314,18 +315,21 @@ let lean_consistency prog_schema prog_const prog_l prog_r bwd_delta_ins_lst bwd_
 
 result
 ;;
+*)
 
-
+(* =============================================================================== *)
+(* =============================================================================== *)
 (* @author: Jumpei Tanaka *)
 (* generate a definition of consistency of co-existence strategy by Jumpei Tanaka *)
 let lean_consistency ast_consis ast_constraint_consis target_pred goal log =
 
-  let temp_log = ref true in   (* temporally set log *)
+  let temp_log = ref false in   (* temporally set log *)
 
   print_endline "deriving schema for lean-consistency";
   let lean_schema_all = String.concat " " (List.map (fun x -> "{"^x^"}") (schemas_to_lean_func_types ast_consis)) in
 
   print_endline "deriving fol of lean-consistency";
+
   let consis = sentence_of_stt_birds ast_consis ast_consis goal temp_log in
 
   print_endline "deriving colums of lean-consistency";
@@ -428,3 +432,27 @@ let lean_undef ast_ttl schema_ttl constraint_ttl putdelta_ttl aux_deltains log =
 lean_fol_of_undef
 ;;
 *)
+
+(* ------------------------------------------------------------------------------------
+  @author: Vandang Tran
+  take a view update datalog program and generate the theorem of checking whether all delta relations are disjoint
+ -----------------------------------------------------------------------------------*)
+let lean_simp_theorem_of_disjoint_delta log prog =
+  (* FOL of schema *)
+  let lean_schema_all = String.concat " " (List.map (fun x -> "{"^x^"}") (schemas_to_lean_func_types prog)) in
+  let debug = false in
+  let fol_of_disjointness =
+    "theorem disjoint_deltas " ^ lean_schema_all ^ ":\n"
+    ^ (Fol_ex.lean_string_of_fol_formula
+        (Imp (
+              constraint_sentence_of_stt prog prog log,
+              (Imp ( Datalog2fol.disjoint_delta_sentence_of_stt debug prog, False))
+             )
+        )
+      )
+  in
+
+  let lean_fol_of_disjointness = gen_lean_code_for_theorems [fol_of_disjointness] in
+
+lean_fol_of_disjointness
+;;

@@ -21,8 +21,8 @@ and rterm =  (* rterm is literal *)
   | Pred of string * var list (* string is name of predicate, var list is a list of variables*)
   | Deltainsert of string * var list (* delta predicate for insertion*)
   | Deltadelete of string * var list (* delta predicate for deletion*)
-  | Deltainsert_ot of string * var list (* by Jumpei Tanaka, delta predicate-ot for insertion *)
-  | Deltadelete_ot of string * var list (* by Jumpei Tanaka,delta predicate-ot for deletion *)
+  | Deltainsert_nos of string * var list (* by Jumpei Tanaka, delta predicate-ot for insertion *)
+  | Deltadelete_nos of string * var list (* by Jumpei Tanaka,delta predicate-ot for deletion *)
 and term = (* term is one of predicate (positive or negative), equation, non-equation *)
   | Rel of rterm (* positive predicate *)
   | Equal of vterm * vterm  (* for example x = 5 *)
@@ -67,8 +67,8 @@ let get_rterm_predname rterm = match rterm with
     | Pred (x, vl) -> x
     | Deltainsert (x, vl)       -> "Δ_ins_"^ x
     | Deltadelete (x, vl)       -> "Δ_del_"^ x
-    | Deltainsert_ot (x, vl)    -> "ot_Δ_ins_"^ x (* by Jumpei Tanaka *)
-    | Deltadelete_ot (x, vl)    -> "ot_Δ_del_"^ x (* by Jumpei Tanaka *)
+    | Deltainsert_nos (x, vl)    -> "nos_Δ_ins_"^ x (* by Jumpei Tanaka *)
+    | Deltadelete_nos (x, vl)    -> "nos_Δ_del_"^ x (* by Jumpei Tanaka *)
 ;;
 
 (** get the arity of an rterm *)
@@ -76,8 +76,8 @@ let get_arity rterm = match rterm with
     | Pred (x, vl)              -> List.length vl
     | Deltainsert (x, vl)       -> List.length vl
     | Deltadelete (x, vl)       -> List.length vl
-    | Deltainsert_ot (x, vl)    -> List.length vl (* by Jumpei Tanaka *)
-    | Deltadelete_ot (x, vl)    -> List.length vl (* by Jumpei Tanaka *)
+    | Deltainsert_nos (x, vl)    -> List.length vl (* by Jumpei Tanaka *)
+    | Deltadelete_nos (x, vl)    -> List.length vl (* by Jumpei Tanaka *)
 ;;
 
 (** get the arity of a rule *)
@@ -133,8 +133,8 @@ let get_rterm_varlist t = match t with
     | Pred (x, vl)            -> vl
     | Deltainsert (x, vl)     -> vl
     | Deltadelete (x, vl)     -> vl
-    | Deltainsert_ot (x, vl)  -> vl (* by Jumpei Tanaka *)
-    | Deltadelete_ot (x, vl)  -> vl (* by Jumpei Tanaka *)
+    | Deltainsert_nos (x, vl)  -> vl (* by Jumpei Tanaka *)
+    | Deltadelete_nos (x, vl)  -> vl (* by Jumpei Tanaka *)
 ;;
 
 (** get rterm varlist *)
@@ -380,8 +380,8 @@ let string_of_rterm r = match r with
     | Pred (pn,vars) -> pn^"("^String.concat ", " (List.map string_of_var vars)^")"
     | Deltainsert (pn,vars) -> "+"^ pn^"("^String.concat ", " (List.map string_of_var vars)^")"
     | Deltadelete (pn,vars) -> "-"^pn^"("^String.concat ", " (List.map string_of_var vars)^")"
-    | Deltainsert_ot (pn,vars) -> "(+)"^ pn^"("^String.concat ", " (List.map string_of_var vars)^")" (* by Jumpei Tanaka *)
-    | Deltadelete_ot (pn,vars) -> "(-)"^pn^"("^String.concat ", " (List.map string_of_var vars)^")" (* by Jumpei Tanaka *)
+    | Deltainsert_nos (pn,vars) -> "(+)"^ pn^"("^String.concat ", " (List.map string_of_var vars)^")" (* by Jumpei Tanaka *)
+    | Deltadelete_nos (pn,vars) -> "(-)"^pn^"("^String.concat ", " (List.map string_of_var vars)^")" (* by Jumpei Tanaka *)
 ;;
 
 (** convert the vterm type into a string *)
@@ -757,8 +757,8 @@ let get_predname rterm = match rterm with
     | Pred (x, vl) -> x
     | Deltainsert (x, vl)       -> x
     | Deltadelete (x, vl)       -> x
-    | Deltainsert_ot (x, vl)    -> x (* by Jumpei Tanaka *)
-    | Deltadelete_ot (x, vl)    -> x (* by Jumpei Tanaka *)
+    | Deltainsert_nos (x, vl)    -> x (* by Jumpei Tanaka *)
+    | Deltadelete_nos (x, vl)    -> x (* by Jumpei Tanaka *)
 ;;
 
 (***********************************************************************)
