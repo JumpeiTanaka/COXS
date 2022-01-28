@@ -44,8 +44,8 @@ TOP_FILES=\
 		calc \
 		datalog2fol\
 		satisfiability\
-		preperation consistency view_common view_init view_evo_case1 view_evo_case2\
-		framework\
+		preperation disjoint consistency view_common view_init view_evo view_ts\
+		framework_tar framework1 framework2 framework\
 
 FILES=\
     $(LOGIC_FILES:%=logic/%)\
