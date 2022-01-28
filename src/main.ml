@@ -50,7 +50,7 @@ let () =
 let main () =
   (* show program version *)
   if (!print_version) then (
-                            print_endline "COXS version 0.2.5";
+                            print_endline "COXS version 0.2.6";
                             exit 0);
 
   (* read from a file and put into AST *)

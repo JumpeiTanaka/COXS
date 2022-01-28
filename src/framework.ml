@@ -16,20 +16,15 @@ let check ast0 log timeout dbschema physical tar =
 
   let target_rels = unique_element @@ get_rels @@ Utils.get_target_rterms ast0 in
 
-  if List.length target_rels >= 3
+  if List.length target_rels >= 2
   then begin
-    print_endline "Error: A strategy defines more than three relations in target schema.";
+    print_endline "Error: A strategy defines more than two relations in target schema.";
     exit 0
     end
-  else if List.length target_rels = 2
-    then begin
-      print_endline "target_rels = 2";
-      Framework2.steps ast0 log timeout dbschema physical
-    end
-    else begin
-      print_endline "target_rels = 1";
-      if !tar
-        then  Framework_tar.steps ast0 log timeout dbschema physical
-        else  Framework1.steps ast0 log timeout dbschema physical
+  else begin
+    print_endline "target_rels = 1";
+    if !tar
+      then  Framework_tar.steps ast0 log timeout dbschema physical
+      else  Framework_src.steps ast0 log timeout dbschema physical
     end
 ;;

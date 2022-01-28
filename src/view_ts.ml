@@ -1174,6 +1174,9 @@ let generate_put_t_ri tar_pred init_pred_lst auxc_keylst auxc_varlst back_ins_re
         let var_keys = get_auxc_var src_rel auxc_keylst in
         let ins_s_var = get_ins_s_var src_vars var_keys in
 
+          (*
+              printf "src_rel = %s\n" src_rel;
+
                printf "var_auxc=> [";
                printf "%s, " src_rel;
                let print_el s = printf "%s; " s in
@@ -1191,6 +1194,7 @@ let generate_put_t_ri tar_pred init_pred_lst auxc_keylst auxc_varlst back_ins_re
                let print_el s = printf "%s; " s in
                List.iter print_el (List.map string_of_var ins_s_var);
                printf "]\n";
+        *)
 
         if (List.mem src_rel back_ins_rels) && (List.mem src_rel back_del_rels)
           then begin
@@ -1247,8 +1251,8 @@ let generate_put_t_ri tar_pred init_pred_lst auxc_keylst auxc_varlst back_ins_re
                             Rel(Pred("b_" ^ tar_rel, tar_vars))
                            ]);
 
-                    Rule(Deltainsert("a_c_" ^ src_rel, var_auxc),
-                           [Rel(Pred("ins_" ^ src_rel, src_vars));
+                    Rule(Deltadelete("a_c_" ^ src_rel, var_auxc),
+                           [Rel(Pred("del_" ^ src_rel, src_vars));
                             Not(Pred("a_c_" ^ src_rel, var_auxc));
                            ]);
                   ]
@@ -1260,6 +1264,17 @@ let generate_put_t_ri tar_pred init_pred_lst auxc_keylst auxc_varlst back_ins_re
           end
       | _ -> []
   in
+
+
+         printf "back_ins_rels=> [";
+         let print_el s = printf "%s; " s in
+         List.iter print_el back_ins_rels;
+         printf "]\n";
+
+         printf "back_del_rels=> [";
+         let print_el s = printf "%s; " s in
+         List.iter print_el back_del_rels;
+         printf "]\n";
 
   let tar_rel = get_rel_from_pred tar_pred in
   let tar_vars = get_varlst_from_pred tar_pred in
@@ -1629,17 +1644,6 @@ _|_ :- a_gain_t(X,Y,Z), not b_t(X,Y,Z).
 *)
 (* ======================================================================================== *)
 let derivation_target_birds ast_schemas ast_constraint_core ast_constraint_pk init_pred_lst head_preds_target_1 target_pred_1 ast_schevo_1 ast_bwd_1 source_rels pk_lst_1 pk_lst_var var_stype log =
-
-(*
-  (*-- functions  ----------------------------------------------------------------------------*)
-  let rec get_base_rels ast_schema = match ast_schema with
-      | [] -> []
-      | hd::rest -> (_1_get_base_rels hd) @ (get_base_rels rest)
-    and _1_get_base_rels stt = match stt with
-      | Source(rel, varlst) -> [rel]
-      | _ -> []
-  in
-*)
 
 
   let rec derive_all_bx_ts_trg
